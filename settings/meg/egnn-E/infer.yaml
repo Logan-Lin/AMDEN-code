@@ -88,10 +88,17 @@ infer:
       target_density: 0.11
       index: ':'
       source:
-        name: extxyz
+        name: 3D_empty
         params:
-          file: datasets/bmp/bmp.extxyz
-          properties_file: datasets/bmp/bmp-properties.json
+          lx: 23
+          ly: 23
+          lz: 23
+          n_samples: 100
+          properties_args:
+            - prop_name: "E [GPa]"
+              mode: "uniform"
+              min_val: 20
+              max_val: 160
     dataloader:
       batch_size: 2
       num_workers: 0

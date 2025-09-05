@@ -112,7 +112,7 @@ infer:
     collate: {}
   params:
     from_random_noise: true
-    n_steps: 200
+    n_steps: 2000
     non_stochastic: false
     con_weight: 0.0
     hmc_n_iterations: 1
