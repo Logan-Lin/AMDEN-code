@@ -123,16 +123,3 @@ datasets/
 │   └── properties.json
 ```
 
-## Model Architectures
-
-Available denoising models:
-- **`egnn_denoiser`**: Standard EGNN-based denoiser
-- **`egnn_deriv_denoiser`**: EGNN denoiser with derivative-based energy refinement
-
-Key model parameters:
-- `elements`: List of atomic species
-- `properties`: Material properties for conditioning (with normalization)
-- `hidden_nf`: Hidden layer dimensions
-- `n_layers`: Number of EGNN layers
-- `r_cut`: Interaction cutoff radius
-
