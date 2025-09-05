@@ -3,12 +3,44 @@ from models.networks.egnn import EGNN
 
 
 class EgnnDenoiser(BaseDenoiser):
+    """E(3)-equivariant graph neural network denoiser for material diffusion.
+    
+    Implements an EGNN-based denoiser that predicts noise in atomic positions and
+    element embeddings while maintaining E(3) equivariance (rotation and translation
+    invariance). This is crucial for learning physical systems where the energy and
+    structure should be independent of global rotations and translations.
+    
+    The denoiser takes noisy material configurations at timestep t and predicts the
+    noise that was added, enabling iterative denoising in the reverse diffusion process.
+    
+    Attributes:
+        egnn (EGNN): The underlying E(3)-equivariant graph neural network.
+    """
+    
     def __init__(self, r_cut, elements=None, properties=None,
                  d_prop_embed=None, node_attrs=False, icg_mode=None, prop_embed_ln=False, **egnn_args):
+        """Initialize EGNN denoiser.
+        
+        Args:
+            r_cut (float): Cutoff radius for neighbor interactions in Angstroms.
+            elements (list[int], optional): List of element types to embed.
+            properties (dict, optional): Property specifications for conditioning.
+            d_prop_embed (int, optional): Embedding dimension for properties.
+            node_attrs (bool, optional): Whether to use node attributes. Defaults to False.
+            icg_mode (str, optional): Independent Condition Guidance mode.
+                Options: None (standard), 'embed' (noisy embedding), 'prop' (noisy property).
+            prop_embed_ln (bool, optional): Apply LayerNorm to property embeddings.
+            **egnn_args: Additional arguments passed to EGNN network.
+        """
         super().__init__(r_cut, elements, properties, d_prop_embed, node_attrs, icg_mode, prop_embed_ln)
         self.init_egnn(egnn_args)
 
     def init_egnn(self, egnn_args):
+        """Initialize the underlying EGNN network with appropriate input/output dimensions.
+        
+        Args:
+            egnn_args (dict): Configuration for EGNN network architecture.
+        """
         in_node_nf = 1  # time
         out_node_nf = 0
     
@@ -30,6 +62,17 @@ class EgnnDenoiser(BaseDenoiser):
             **egnn_args)
 
     def forward(self, sample, t):
+        """Forward pass to predict noise in positions and optionally elements.
+        
+        Args:
+            sample (Sample): Noisy material sample at timestep t.
+            t (torch.FloatTensor): Diffusion timestep, shape (batch_size,).
+            
+        Returns:
+            tuple: (noise_pos, noise_els) where:
+                - noise_pos: Predicted position noise, shape (n_atoms, 3)
+                - noise_els: Predicted element embedding noise or None
+        """
         edges = self._get_edges(sample)
         h = self.assemble_h(sample, sample.get_element_emb(), t)
         x = sample.get_positions()

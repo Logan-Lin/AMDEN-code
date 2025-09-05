@@ -9,11 +9,29 @@ from torch.utils.tensorboard import SummaryWriter
 
 
 def create_if_noexists(path):
+    """Create directory if it doesn't exist.
+    
+    Args:
+        path (str): Directory path to create.
+    """
     if not os.path.exists(path):
         os.makedirs(path)
 
 
 def next_version(directory, base_name, extension):
+    """Generate next available version filename to avoid overwriting.
+    
+    Finds the next available filename by appending version numbers (v1, v2, etc.)
+    to avoid overwriting existing files.
+    
+    Args:
+        directory (str): Directory containing the files.
+        base_name (str): Base filename without extension.
+        extension (str): File extension including the dot.
+        
+    Returns:
+        str: Complete path with version number that doesn't exist.
+    """
     if not os.path.exists(directory):
         os.makedirs(directory)
     version = 0
@@ -25,6 +43,18 @@ def next_version(directory, base_name, extension):
 
 
 def positions_into_cell(pos, cell):
+    """Wrap atomic positions into the unit cell using periodic boundaries.
+    
+    Maps atomic positions to their equivalent positions within the unit cell
+    by applying periodic boundary conditions.
+    
+    Args:
+        pos (torch.Tensor): Atomic positions, shape (n_atoms, 3).
+        cell (torch.Tensor): Unit cell matrix, shape (3, 3).
+        
+    Returns:
+        torch.Tensor: Wrapped positions within the unit cell.
+    """
     invlat = torch.linalg.inv(cell)
     relpos = pos @ invlat
     relpos = relpos % 1.0
@@ -33,6 +63,17 @@ def positions_into_cell(pos, cell):
 
 
 def string2slice(s):
+    """Convert string representation to Python slice object.
+    
+    Parses slice notation strings like ':10', '5:', '1:10:2' into
+    Python slice objects for array indexing.
+    
+    Args:
+        s (str): String representation of slice (e.g., ':', ':10', '5:15').
+        
+    Returns:
+        slice: Python slice object.
+    """
     if ':' in s:
         return slice(*map(lambda x: int(x) if x else None, s.split(':')))
     else:
@@ -40,6 +81,17 @@ def string2slice(s):
 
 
 class TrainLogger:
+    """Logger for training progress and metrics.
+    
+    Handles logging of training metrics including loss values, learning rates,
+    and other training statistics. Provides methods for writing to files and
+    computing running averages.
+    
+    Attributes:
+        log_path (str): Path to the log file.
+        log_freq (int): Frequency of logging (every N iterations).
+        log_split_loss (bool): Whether to log separate position and element losses.
+    """
     def __init__(self, file, n_bins, t_min, t_max, log_split_loss=False):
         self.file = file
         self.n_bins = n_bins
@@ -99,6 +151,14 @@ class TrainLogger:
 
 
 class TensorBoardLogger:
+    """TensorBoard logger for visualizing training metrics.
+    
+    Wraps TensorBoard SummaryWriter to provide convenient logging of scalars,
+    images, and other metrics during training and inference.
+    
+    Attributes:
+        writer (SummaryWriter): TensorBoard writer instance.
+    """
     def __init__(self, log_dir):
         # Create tensorboard directory if it doesn't exist
         os.makedirs(log_dir, exist_ok=True)

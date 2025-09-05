@@ -6,20 +6,39 @@ from .noise_schedules import VarianceExplodingNoiseSchedule, VariancePreservingN
 
 
 class MaterialNoiseSchedule:
-    """The compound noise schedule for both elements and coordinates of atoms in material samples.
+    """Compound noise schedule for diffusing both atomic positions and elements.
+    
+    Manages the forward and reverse diffusion processes for material structures,
+    handling both continuous (positions) and discrete (elements) features. Uses
+    variance exploding (VE) schedule for positions to preserve scale invariance
+    and optionally variance preserving (VP) schedule for element embeddings.
+    
+    This scheduler is the core of the material diffusion model, orchestrating
+    the gradual addition of noise (forward process) and iterative denoising
+    (reverse process) to generate new material structures.
+    
+    Attributes:
+        model (nn.Module): The denoiser model for predicting noise.
+        uncond_model (nn.Module, optional): Unconditional model for classifier-free guidance.
+        t_min (float): Minimum time value (typically near 0).
+        t_max (float): Maximum time value (typically 1).
+        pos_noise (VarianceExplodingNoiseSchedule): Schedule for position diffusion.
+        el_noise (VariancePreservingNoiseSchedule, optional): Schedule for element diffusion.
     """
+    
     def __init__(self, model, t_min, t_max, uncond_model=None, sigma_max_pos=1.0,
                  noise_schedule_el=None, sigma_max_el=1.0):
-        """Noise scheduler for materials. Takes care of adding, and removing noise.
+        """Initialize material noise scheduler.
 
         Args:
-            t_min (int): Start time of noise schedule
-            t_max (int): End time of noise schedule
-            elements (List(str|int)): List of all elements present in the dataset. Can be list of ints or str.
-            sigma_max_pos (float, optional): Maximum variance of position noise. Defaults to 1.0.
-            noise_schedule_el (None|str, optional): Noise schedule for the elements. Can be None, "linear" or "cosine".
-            If None, elements are not diffused. Defaults to None.
-            sigma_max_el (float, optional): Maximum variance of element noise. Defaults to 1.0.
+            model (nn.Module): Denoiser model for noise prediction.
+            t_min (float): Start time of noise schedule (typically 0.001).
+            t_max (float): End time of noise schedule (typically 1.0).
+            uncond_model (nn.Module, optional): Model for unconditional generation.
+            sigma_max_pos (float, optional): Maximum noise std for positions. Defaults to 1.0.
+            noise_schedule_el (str, optional): Schedule type for elements ('linear', 'cosine', or None).
+                If None, elements are not diffused. Defaults to None.
+            sigma_max_el (float, optional): Maximum noise std for elements. Defaults to 1.0.
         """
         # super().__init__()
 

@@ -27,8 +27,32 @@ save_dirs = {
 
 
 class MaterialDataset(Dataset):
+    """PyTorch Dataset for loading and preprocessing material structures.
+    
+    This class handles loading material structures from various sources (LAMMPS, ExtXYZ, or 
+    synthetic examples) and provides preprocessing capabilities including atom type filtering,
+    ghost atom addition for density control, and charge balancing.
+    
+    Attributes:
+        samples (list[Sample]): List of Sample objects representing material structures.
+    """
 
     def __init__(self, source, select_atom_types=None, target_density=None, index=':', save_dir=None):
+        """Initialize MaterialDataset.
+        
+        Args:
+            source (dict): Dictionary specifying data source with keys:
+                - 'name' (str): Source type ('lammps', 'extxyz', '2D_example', '3D_example', '3D_empty')
+                - 'params' (dict): Source-specific parameters
+            select_atom_types (list[int], optional): Filter to only include specified atom types.
+                Defaults to None (include all atoms).
+            target_density (float, optional): Target density for adding ghost atoms (atoms/Å³).
+                Defaults to None (no ghost atoms added).
+            index (str, optional): Slice notation for selecting subset of samples.
+                Defaults to ':' (all samples).
+            save_dir (str, optional): Directory to save processed samples as ExtXYZ.
+                Defaults to None (no saving).
+        """
         super().__init__()
         source_name = source['name']
         if source_name == 'lammps':
@@ -69,7 +93,15 @@ class MaterialDataset(Dataset):
         return self.samples[index]
 
     def read_lammps_dataset(self, root_dir, style):
-        """Read files in LAMMPS data format.
+        """Read material structures from LAMMPS data files.
+        
+        Args:
+            root_dir (str): Root directory containing subdirectories with LAMMPS files.
+                Each subdirectory should contain a 'final.data' file.
+            style (str): LAMMPS atom style (e.g., 'atomic', 'charge', 'full').
+            
+        Returns:
+            list[Sample]: List of Sample objects parsed from LAMMPS files.
         """
         samples = []
         for inst_name in tqdm(os.listdir(root_dir), desc='Loading raw files'):
@@ -80,7 +112,17 @@ class MaterialDataset(Dataset):
         return samples
 
     def read_extxyz_dataset(self, file, properties_file=None, index=':'):
-        """Read files in Extended XYZ format.
+        """Read material structures from Extended XYZ format files.
+        
+        Args:
+            file (str): Path to ExtXYZ file containing atomic structures.
+            properties_file (str, optional): Path to JSON/YAML file with material properties
+                for conditioning. Properties are matched to structures by index.
+            index (str, optional): Slice notation for selecting subset of structures.
+                Defaults to ':' (all structures).
+            
+        Returns:
+            list[Sample]: List of Sample objects with attached properties.
         """
         samples = read(file, index=index)
 
@@ -285,7 +327,21 @@ class MaterialDataset(Dataset):
         return samples
 
 class Sample:
-    """Representing one 3D material sample.
+    """Represents a single 3D material structure with atoms and properties.
+    
+    Core data structure for material samples in the diffusion model. Handles atomic
+    positions, elements, periodic boundary conditions, and material properties used
+    for conditional generation. Supports efficient neighbor list computation and
+    E(3)-equivariant operations.
+    
+    Attributes:
+        elements (torch.LongTensor): Atomic numbers, shape (n_atoms,).
+        positions (torch.FloatTensor): Atomic positions in Angstroms, shape (n_atoms, 3).
+        lattice (torch.FloatTensor): Unit cell vectors, shape (3, 3).
+        pbc (tuple[bool]): Periodic boundary conditions for each axis.
+        neighborlist (Neighborlist): Efficient neighbor finding data structure.
+        element_emb (torch.FloatTensor, optional): Learned element embeddings.
+        properties (dict[str, torch.Tensor], optional): Material properties for conditioning.
     """
 
     def __init__(self, elements, positions, lattice, pbc=(True, True, True),
@@ -331,6 +387,14 @@ class Sample:
     @staticmethod
     def from_ase_atoms(atoms: Atoms, properties=None):
         """Create Sample object from ASE Atoms object.
+        
+        Args:
+            atoms (ase.Atoms): ASE Atoms object containing atomic structure.
+            properties (dict, optional): Dictionary of material properties for conditioning.
+                Keys are property names, values are property tensors or None for null properties.
+                
+        Returns:
+            Sample: New Sample object with data extracted from ASE Atoms.
         """
         return Sample(
             torch.tensor(atoms.get_atomic_numbers(), dtype=torch.long),
@@ -341,6 +405,10 @@ class Sample:
 
     def to_ase_atoms(self):
         """Create ASE Atoms object from this Sample.
+        
+        Returns:
+            ase.Atoms: ASE Atoms object with positions, elements, cell, and PBC
+                from this Sample. Properties are not transferred.
         """
         return Atoms(
             numbers=self.elements.detach().cpu().numpy(),
@@ -532,13 +600,25 @@ class Sample:
 
 
 class Batch:
-    """Representing a batch of 3D material samples.
+    """Container for batching multiple Sample objects for efficient processing.
+    
+    Handles concatenation of atomic data from multiple samples while maintaining
+    sample boundaries for proper graph construction and property tracking. Essential
+    for batched training and inference in the diffusion model.
+    
+    Attributes:
+        samples (list[Sample]): List of individual Sample objects.
+        positions (torch.FloatTensor): Concatenated positions from all samples.
+        elements (torch.LongTensor): Concatenated element types from all samples.
+        element_emb (torch.FloatTensor, optional): Concatenated element embeddings.
     """
 
     def __init__(self, samples):
-        """
+        """Initialize batch container with list of samples.
+        
         Args:
-            samples (list): each item is a Sample object.
+            samples (list[Sample]): List of Sample objects to batch together.
+                All samples should have compatible structure for concatenation.
         """
         self.samples = samples
         self.positions = torch.concat(
@@ -697,15 +777,29 @@ class Batch:
             self.element_emb = torch.concat(element_embs, dim=0)
 
 class MaterialCollateFn:
+    """Custom collate function for batching material samples in DataLoader.
+    
+    Handles the special batching requirements of material structures, including
+    proper concatenation of variable-sized samples and maintenance of sample
+    boundaries for graph operations.
+    
+    Attributes:
+        device (str): Target device for tensor placement ('cuda' or 'cpu').
+    """
+    
     def __init__(self, device):
+        """Initialize collate function.
+        
+        Args:
+            device (str): Device to place batched tensors on.
+        """
         self.device = device
 
     def __call__(self, sample_batch):
-        """
-        Batch preprocessor for material samples.
+        """Collate list of samples into a Batch object.
 
         Args:
-            - sample_batch (list): input raw batch, a list of Sample objects.
+            sample_batch (list[Sample]): List of Sample objects to batch.
 
         Returns:
             Batch: A batch of samples with ghost atoms added if target_density is set.

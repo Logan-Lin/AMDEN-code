@@ -4,7 +4,29 @@ from torch import nn
 
 
 class OneHotElementEmbedding(nn.Module):
+    """One-hot encoding for element types.
+    
+    Converts atomic numbers to one-hot vectors for input to neural networks.
+    Maintains mappings between atomic numbers and embedding indices, enabling
+    both forward embedding and reverse un-embedding operations.
+    
+    The embedding dimension equals the number of unique element types, providing
+    a simple but effective representation for material composition.
+    
+    Attributes:
+        n_elements (int): Number of unique element types.
+        dim (int): Embedding dimension (equals n_elements).
+        element_idx (torch.LongTensor): Maps atomic numbers to embedding indices.
+        inverse_element_idx (torch.LongTensor): Maps embedding indices back to atomic numbers.
+    """
+    
     def __init__(self, elements):
+        """Initialize one-hot element embedding.
+        
+        Args:
+            elements (list): List of element types (atomic numbers or symbols).
+                Can contain integers (atomic numbers) or strings (element symbols).
+        """
         super().__init__()
         self.n_elements = len(elements)
         self.dim = self.n_elements  # dimension of the element embedding
@@ -24,8 +46,28 @@ class OneHotElementEmbedding(nn.Module):
         self.register_buffer('inverse_element_idx', inverse_element_idx)
 
     def embed(self, elements):
+        """Convert element indices to one-hot embeddings.
+        
+        Args:
+            elements (torch.LongTensor): Atomic numbers, shape (n_atoms,).
+            
+        Returns:
+            torch.FloatTensor: One-hot embeddings, shape (n_atoms, n_elements).
+        """
         emb = nn.functional.one_hot(self.element_idx[elements], self.n_elements).float()
         return emb
 
     def unembed(self, element_emb):
+        """Convert one-hot embeddings back to element indices.
+        
+        Uses argmax to find the most likely element type from the embedding.
+        Primarily used during inference to convert predicted embeddings back
+        to discrete element types.
+        
+        Args:
+            element_emb (torch.FloatTensor): Element embeddings, shape (n_atoms, n_elements).
+            
+        Returns:
+            torch.LongTensor: Atomic numbers, shape (n_atoms,).
+        """
         return self.inverse_element_idx[torch.argmax(element_emb, dim=1)]

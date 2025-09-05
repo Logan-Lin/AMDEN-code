@@ -101,7 +101,19 @@ class BaseDenoiser(nn.Module):
         return self.properties
 
     def assemble_h(self, sample, element_emb, t):
-        """Assemble node features."""
+        """Assemble node features for GNN input.
+        
+        Combines timestep, element embeddings, and property embeddings into
+        node feature vectors for the graph neural network.
+        
+        Args:
+            sample (Sample): Material sample containing properties and batch indices.
+            element_emb (torch.Tensor): Element embeddings, shape (n_atoms, embed_dim).
+            t (torch.Tensor): Diffusion timesteps, shape (batch_size,).
+            
+        Returns:
+            torch.Tensor: Assembled node features, shape (n_atoms, total_feature_dim).
+        """
         batch_idx = sample.get_batch_indices().to(sample.get_positions().device)
         h = t[batch_idx].unsqueeze(-1)
         

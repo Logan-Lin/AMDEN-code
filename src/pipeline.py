@@ -17,24 +17,28 @@ def train(model, scheduler, loss_func, train_dataloader,
     """Training pipeline.
 
     Args:
-        scheduler: diffusion scheduler.
-        loss_func: diffusion loss function.
-        model (nn.Module): the diffusion denoiser model to train.
-        train_dataloader (DataLoader): data iterator for training.
-        lr (float): the initial learning rate of the optimizer.
-        num_epochs (int): total number of epoches to train the model.
-        prop_null_prob (float, optional): probability of a property randomly masked into a null property.
-        optimizer_name (str, optional): indicating which optimizer to use. Defaults to 'adam'.
-        lr_scheduler (dict, optional): dictionary containing scheduler configuration with keys:
+        model (nn.Module): The diffusion denoiser model to train.
+        scheduler (MaterialNoiseSchedule): Diffusion scheduler for adding/removing noise.
+        loss_func (nn.Module): Diffusion loss function (e.g., EpsilonDiff).
+        train_dataloader (DataLoader): Data iterator for training batches.
+        lr (float): Initial learning rate for the optimizer.
+        num_epochs (int): Total number of epochs to train the model.
+        start_epoch (int, optional): Starting epoch number for resumed training. Defaults to 0.
+        prop_null_prob (float, optional): Probability of randomly masking individual properties 
+            to null. Defaults to 0.0.
+        prop_null_prob_all (float, optional): Probability of masking all properties to null 
+            for unconditional training. Defaults to 0.0.
+        optimizer_name (str, optional): Optimizer type ('adam' or 'sgd'). Defaults to 'adam'.
+        lr_scheduler (dict, optional): Learning rate scheduler configuration with keys:
             - 'enabled': bool, whether to use the scheduler
-            - 'name': str, name of the scheduler ('reduce_lr_on_plateu' or 'one_cycle_lr')
+            - 'name': str, scheduler type ('reduce_lr_on_plateu' or 'one_cycle_lr')
             - 'params': dict, parameters to pass to the scheduler
-        save (dict, optional): dictionary containing save configuration with keys:
+        save (dict, optional): Save configuration with keys:
             - 'name': str, name for saving log and model parameters
-            - 'epoch': int, frequency of saves
-        orig_model (nn.Module, optional): the uncompiled model.
-        init_r_cut: initial cutoff distance.
-        clip_grad_norm (float, optional): clip the gradient norm of model parameters.
+            - 'epoch': int, frequency of saves (save every N epochs)
+        orig_model (nn.Module, optional): Original uncompiled model (if model is compiled).
+        init_r_cut (float, optional): Initial cutoff distance for neighbor list precomputation.
+        clip_grad_norm (float, optional): Maximum gradient norm for gradient clipping.
     """
     if init_r_cut is not None:
         for sample in tqdm(train_dataloader.dataset, desc='Creating initial neighborlists'):
@@ -199,17 +203,39 @@ def infer(model, scheduler, infer_dataloader, n_steps,
     """Inference pipeline for generating new material samples.
 
     Args:
-        model (nn.Module): the diffusion denoiser model.
-        infer_dataloader (DataLoader): data iterator for inference.
-        n_steps (int): number of diffusion steps used for inference.
-        save (dict, optional): dictionary containing saving configuration with keys:
+        model (nn.Module): The diffusion denoiser model for generating samples.
+        scheduler (MaterialNoiseSchedule): Diffusion scheduler for the denoising process.
+        infer_dataloader (DataLoader): Data iterator providing conditioning samples for inference.
+        n_steps (int): Number of diffusion denoising steps for generation.
+        uncond_model (nn.Module, optional): Unconditional model for classifier-free guidance.
+        save (dict, optional): Save configuration with keys:
             - 'name': str, name for saving generated samples and logs
             - 'trajectories': dict, trajectory saving configuration with keys:
                 - 'enabled': bool, whether to save trajectory files
                 - 'batches': list, indices of batches to save trajectories for (default: [0])
             - 'enable_log': bool, whether to save log files (default: False)
-        from_random_noise (bool, optional): whether to create the starting point of the denoising process by sample from a random distribution 
-            or by adding noise to real samples.
+        from_random_noise (bool, optional): Whether to start denoising from random noise (True)
+            or from noisy real samples (False). Defaults to True.
+        non_stochastic (bool, optional): Use deterministic ODE instead of stochastic SDE for
+            denoising. Defaults to False.
+        max_repeats (int, optional): Maximum number of attempts to repeat generation for
+            charge-unbalanced samples. Defaults to 0.
+        max_restarts (int, optional): Maximum number of attempts to restart generation from
+            intermediate timestep for charge-unbalanced samples. Defaults to 0.
+        restart_t (float, optional): Timestep to restart generation from for charge balancing.
+        restart_n_steps (int, optional): Number of steps for restarted generation.
+        con_weight (float, optional): Conditioning weight for classifier-free guidance. 
+            Defaults to 0.0.
+        hmc_n_iterations (int, optional): Number of HMC sampling iterations per timestep.
+            Defaults to 0 (no HMC).
+        hmc_n_steps (int, optional): Number of leapfrog steps per HMC iteration. Defaults to 15.
+        hmc_dt (float, optional): Step size for HMC leapfrog integration. Defaults to 0.5.
+        hmc_range (tuple, optional): Time range (t_min, t_max) for applying HMC. 
+            Defaults to (0., 1.).
+        init_r_cut (float, optional): Initial cutoff for neighbor list precomputation.
+            
+    Returns:
+        None: Generated samples are saved to files if save configuration is provided.
     """
     def restart_unbalanced_samples(final_sample, max_attempts, from_random_noise=False):
         """
@@ -375,12 +401,17 @@ def infer(model, scheduler, infer_dataloader, n_steps,
 
 
 def save_model(model, save_name, uncompiled_model=None, epoch=None):
-    """Save the trained model parameters to a cache file.
-
+    """Save model parameters to disk.
+    
+    Saves the model state dict to a file in the models directory. Handles both
+    compiled and uncompiled models, saving the uncompiled version when available
+    for better portability.
+    
     Args:
-        model (nn.Module): the neural network model to save.
-        save_name (str): an indicator of the model's name, used as the directory for saving this model.
-        epoch (int, optional): indication of the saved model's number of trained epoches.
+        model (nn.Module): The model to save.
+        save_name (str): Base name for the saved file.
+        uncompiled_model (nn.Module, optional): Original uncompiled model if model was compiled.
+        epoch (int, optional): Epoch number to include in filename.
     """
     os.makedirs(os.path.join(save_dirs['models'], save_name), exist_ok=True)
     model_path = os.path.join(save_dirs['models'], save_name, f'{epoch:05d}.pt' if epoch is not None else 'final.pt')
@@ -391,7 +422,15 @@ def save_model(model, save_name, uncompiled_model=None, epoch=None):
 
 
 def load_model(model, save_name, epoch=None):
-    """Load model parameters from a cache file.
+    """Load model parameters from disk.
+    
+    Loads previously saved model state dict and applies it to the provided model.
+    Can load from a specific epoch or the final saved version.
+    
+    Args:
+        model (nn.Module): The model to load parameters into.
+        save_name (str): Base name of the saved model.
+        epoch (int, optional): Specific epoch to load. If None, loads 'final.pt'.
     """
     model_name = f'{epoch:05d}.pt' if epoch is not None else 'final.pt'
     model_path = os.path.join(save_dirs['models'], save_name, model_name)

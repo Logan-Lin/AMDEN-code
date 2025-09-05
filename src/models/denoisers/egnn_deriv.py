@@ -8,7 +8,18 @@ from data import Batch
 
 
 def check_nan(tensor, location):
-    """Check if tensor contains NaN and log the location where NaN is detected."""
+    """Check if tensor contains NaN and log the location where NaN is detected.
+    
+    Args:
+        tensor (torch.Tensor or tuple): Tensor(s) to check for NaN values.
+        location (str): Description of where the tensor comes from for debugging.
+        
+    Returns:
+        torch.Tensor or tuple: The input tensor(s), unchanged if no NaN.
+        
+    Raises:
+        ValueError: If NaN is detected in the tensor.
+    """
     if isinstance(tensor, tuple):
         for i, t in enumerate(tensor):
             if t is not None and torch.isnan(t).any():
@@ -19,12 +30,40 @@ def check_nan(tensor, location):
 
 
 class EgnnDerivDenoiser(EgnnDenoiser):
+    """EGNN denoiser with derivative computation for energy-based guidance.
+    
+    Extends the base EGNN denoiser to compute derivatives of the network output
+    with respect to positions, enabling energy computation and gradient-based
+    sampling methods. This is particularly useful for incorporating physical
+    constraints and energy minimization into the generation process.
+    
+    The derivative capability allows for Hamiltonian Monte Carlo (HMC) sampling
+    and other gradient-based refinement techniques during the denoising process.
+    
+    Attributes:
+        kB_T (float): Boltzmann constant times temperature for energy scaling.
+        atomic_energy_scale (float): Scaling factor for predicted atomic energies.
+    """
     
     def __init__(self, 
                  r_cut, 
                  kB_T=1.0, atomic_energy_scale=1.0, 
                  elements=None, properties=None, d_prop_embed=None, node_attrs=False, icg_mode=None, prop_embed_ln=False,
                  **egnn_args):
+        """Initialize EGNN derivative denoiser.
+        
+        Args:
+            r_cut (float): Cutoff radius for neighbor interactions in Angstroms.
+            kB_T (float, optional): Temperature factor for energy scaling. Defaults to 1.0.
+            atomic_energy_scale (float, optional): Scaling for atomic energies. Defaults to 1.0.
+            elements (list[int], optional): List of element types to embed.
+            properties (dict, optional): Property specifications for conditioning.
+            d_prop_embed (int, optional): Embedding dimension for properties.
+            node_attrs (bool, optional): Whether to use node attributes. Defaults to False.
+            icg_mode (str, optional): Independent Condition Guidance mode.
+            prop_embed_ln (bool, optional): Apply LayerNorm to property embeddings.
+            **egnn_args: Additional arguments passed to EGNN network.
+        """
 
         super().__init__(r_cut, 
                          elements=elements, 
@@ -96,7 +135,6 @@ class EgnnDerivDenoiser(EgnnDenoiser):
         dE_del = dE_del / sigma_t[sample.get_batch_indices()].unsqueeze(1) if calc_dE_del else None
         return energy, forces, dE_del
 
-
     # the noise energy is energy * sigma_t
     def get_noise_energy(self, sample, t, calc_E=True, calc_dE_dx=False, calc_dE_del=False):
         edges = self._get_edges(sample)
@@ -134,6 +172,4 @@ class EgnnDerivDenoiser(EgnnDenoiser):
     def forward(self, sample, t):
         _, dE_dx, dE_del = self.get_noise_energy(sample, t, calc_E=False, calc_dE_dx=True, calc_dE_del=self.element_embedding is not None)
         return (dE_dx, dE_del)
-
-
 

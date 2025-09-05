@@ -8,7 +8,31 @@ from utils import positions_into_cell
 
 
 class Neighborlist:
+    """Efficient neighbor list computation for periodic systems.
+    
+    Manages neighbor finding for atomic systems with periodic boundary conditions.
+    Pre-computes and caches neighbor lists at initialization cutoff, then provides
+    efficient edge extraction at smaller cutoffs during model evaluation.
+    
+    Essential for graph neural networks operating on material systems where
+    atoms interact with neighbors within a cutoff radius across periodic boundaries.
+    
+    Attributes:
+        lattice (torch.Tensor): Unit cell matrix, shape (3, 3).
+        pbc (tuple[bool]): Periodic boundary conditions for each axis.
+        init_r_cut (float, optional): Initial cutoff for neighbor list construction.
+        use_torch_nl (bool): Whether to use torch_nl backend for efficiency.
+    """
+    
     def __init__(self, lattice, pbc, init_r_cut=None, use_torch_nl=True):
+        """Initialize neighbor list manager.
+        
+        Args:
+            lattice (torch.Tensor): Unit cell matrix, shape (3, 3).
+            pbc (tuple[bool]): Periodic boundary conditions for each axis.
+            init_r_cut (float, optional): Initial cutoff for neighbor list construction.
+            use_torch_nl (bool, optional): Use torch_nl backend. Defaults to True.
+        """
         self.lattice = lattice
         self.pbc = pbc
         self.init_r_cut = init_r_cut # this will be used for NL construction, if provided

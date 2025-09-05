@@ -3,6 +3,16 @@ from torch import nn
 
 
 class GCL(nn.Module):
+    """Graph Convolutional Layer for message passing in EGNN.
+    
+    Implements a single layer of message passing that operates on node features
+    while maintaining permutation equivariance. Processes edge and node information
+    through MLPs to update node representations based on local graph structure.
+    
+    Supports optional attention mechanisms and residual connections for
+    improved learning dynamics.
+    """
+    
     def __init__(self, input_nf, output_nf, hidden_nf, normalization_factor, aggregation_method,
                  edges_in_d=0, nodes_att_dim=0, act_fn=nn.SiLU(), attention=False, residual=True):
         super(GCL, self).__init__()
@@ -74,6 +84,14 @@ class GCL(nn.Module):
 
 
 class EquivariantUpdate(nn.Module):
+    """E(3)-equivariant position update module.
+    
+    Updates atomic positions in an E(3)-equivariant manner, ensuring that
+    the model's predictions respect rotational and translational symmetries
+    of 3D space. This is crucial for learning physical systems where energy
+    and forces must be invariant to global rotations and translations.
+    """
+    
     def __init__(self, hidden_nf, normalization_factor, aggregation_method,
                  edges_in_d=1, act_fn=nn.SiLU(), tanh=False, coords_range=10.0,
                  n_coords=1):
@@ -120,6 +138,13 @@ class EquivariantUpdate(nn.Module):
 
 
 class EquivariantBlock(nn.Module):
+    """Complete E(3)-equivariant message passing block.
+    
+    Combines GCL layers for node feature updates with EquivariantUpdate
+    for position updates, forming a complete equivariant transformation.
+    Multiple blocks are stacked to form the full EGNN architecture.
+    """
+    
     def __init__(self, hidden_nf, edge_feat_nf=1, device='cpu', act_fn=nn.SiLU(), n_layers=2, attention=True,
                  tanh=False, coords_range=15, norm_constant=1,
                  normalization_factor=100, aggregation_method='sum', r_cut=1., n_coords=1,
@@ -174,6 +199,19 @@ class EquivariantBlock(nn.Module):
 
 
 class EGNN(nn.Module):
+    """E(3)-Equivariant Graph Neural Network.
+    
+    Main EGNN architecture that processes molecular/material graphs while
+    maintaining E(3) equivariance. Stacks multiple EquivariantBlocks to
+    learn complex interactions between atoms while respecting physical
+    symmetries.
+    
+    This is the core network used by the denoiser models to predict noise
+    in both positions and node features (elements) during the diffusion process.
+    
+    Reference: Satorras et al., "E(n) Equivariant Graph Neural Networks" (ICML 2021)
+    """
+    
     def __init__(self, in_node_nf, hidden_nf, r_cut, device='cpu', act_fn=nn.SiLU(), n_layers=3, attention=False,
                  out_node_nf=None, tanh=False, coords_range=15, norm_constant=1, inv_sublayers=2,
                  sin_embedding=False, sin_embedding_time=False, normalization_factor=100, aggregation_method='sum',
@@ -288,6 +326,17 @@ class GNN(nn.Module):
 
 
 def coord2diff(x, edge_index, norm_constant=1.0):
+    """Compute position differences between connected atoms.
+    
+    Args:
+        x (torch.Tensor): Atomic positions, shape (n_atoms, n_coords, 3).
+        edge_index (tuple): (row, col, offset) defining edges and periodic offsets.
+        norm_constant (float, optional): Normalization constant. Defaults to 1.0.
+        
+    Returns:
+        tuple: (distances, normalized_differences) where distances are scalar
+            edge lengths and normalized_differences are unit vectors.
+    """
     row, col, offset = edge_index
     coord_diff = x[row] - x[col] - offset.unsqueeze(1)
     radial = torch.sum((coord_diff) ** 2, 2).unsqueeze(2)
@@ -297,6 +346,18 @@ def coord2diff(x, edge_index, norm_constant=1.0):
 
 
 def unsorted_segment_sum(data, segment_ids, num_segments, normalization_factor, aggregation_method: str):
+    """Aggregate messages by summing over edges connected to each node.
+    
+    Args:
+        data (torch.Tensor): Edge messages to aggregate.
+        segment_ids (torch.LongTensor): Node indices for each edge.
+        num_segments (int): Total number of nodes.
+        normalization_factor (float): Factor to normalize aggregation.
+        aggregation_method (str): Method for aggregation ('sum' or 'mean').
+        
+    Returns:
+        torch.Tensor: Aggregated messages per node.
+    """
     """Custom PyTorch op to replicate TensorFlow's `unsorted_segment_sum`.
         Normalization: 'sum' or 'mean'.
     """

@@ -8,11 +8,24 @@ from torch_geometric.nn.models import Node2Vec
 
 
 class SinusoidsEmbedding(nn.Module):
+    """Sinusoidal embedding for continuous values like time or distances.
+    
+    Uses multiple sinusoidal frequencies to encode continuous values into
+    high-dimensional vectors, similar to positional encoding in Transformers.
+    Particularly useful for encoding diffusion timesteps.
+    
+    Attributes:
+        frequencies (torch.Tensor): Frequency values for sinusoidal encoding.
+        dim (int): Output embedding dimension (2 * number of frequencies).
+    """
+    
     def __init__(self, max_res=15., min_res=15. / 2000., div_factor=4):
-        """Sinusoidal embedding for squared distances (assumes input is squared)
-            max_res: Maximum wavelength 
-            min_res: Minimum wavelength
-            div_factor: ratio between following wavelengths/frequencies
+        """Initialize sinusoidal embedding.
+        
+        Args:
+            max_res (float, optional): Maximum wavelength. Defaults to 15.
+            min_res (float, optional): Minimum wavelength. Defaults to 15/2000.
+            div_factor (float, optional): Ratio between consecutive frequencies. Defaults to 4.
         """
         super().__init__()
         self.n_frequencies = int(math.log(max_res / min_res, div_factor)) + 1
@@ -28,10 +41,19 @@ class SinusoidsEmbedding(nn.Module):
 
 
 class FourierEncode(nn.Module):
-    """A type of trigonometric encoding for encode continuous values into distance-sensitive vectors.
+    """Learnable Fourier encoding for continuous values.
+    
+    Encodes scalar values using learnable frequencies and phases, creating
+    distance-sensitive embeddings. Unlike fixed sinusoidal embeddings,
+    the frequencies and biases are learned parameters.
     """
 
     def __init__(self, embed_size):
+        """Initialize Fourier encoder.
+        
+        Args:
+            embed_size (int): Output embedding dimension.
+        """
         super().__init__()
         self.omega = nn.Parameter((torch.from_numpy(1 / 10 ** np.linspace(0, 9, embed_size))).float(),
                                   requires_grad=True)
@@ -54,6 +76,11 @@ class FourierEncode(nn.Module):
 
 
 class Element2Vec(nn.Module):
+    """Learnable element embeddings using Element2Vec approach.
+    
+    Provides dense, learnable embeddings for chemical elements based on
+    their properties and chemical similarity, as an alternative to one-hot encoding.
+    """
     """Embed each element into an latent vector by utilizing the node2vec model.
     """
 
@@ -85,6 +112,12 @@ class Element2Vec(nn.Module):
 
 
 class MultiLayerPerceptron(nn.Module):
+    """Multi-layer perceptron with configurable architecture.
+    
+    Standard fully-connected neural network with customizable activation functions,
+    dropout, and normalization layers. Used throughout the model for various
+    nonlinear transformations.
+    """
     """
     Multi-layer Perceptron.
     Note there is no activation or dropout in the last layer.
@@ -126,6 +159,12 @@ class MultiLayerPerceptron(nn.Module):
 
 
 class GaussianSmearing(nn.Module):
+    """Gaussian radial basis function expansion for distances.
+    
+    Expands scalar distances using Gaussian basis functions with learnable
+    or fixed centers and widths. Commonly used in molecular ML to represent
+    inter-atomic distances in a differentiable, smooth manner.
+    """
     """Gaussian Smearing module for approximating the effects of temperature on electronic states in simulations.
     """
 
@@ -141,6 +180,12 @@ class GaussianSmearing(nn.Module):
 
 
 class AsymmetricSineCosineSmearing(nn.Module):
+    """Asymmetric sine-cosine basis function expansion.
+    
+    Uses asymmetric sine and cosine functions to expand distances,
+    providing a different basis set compared to Gaussian smearing.
+    Can capture different distance-dependent patterns in the data.
+    """
     def __init__(self, num_basis=50):
         super().__init__()
         num_basis_k = num_basis // 2
@@ -163,6 +208,12 @@ class AsymmetricSineCosineSmearing(nn.Module):
 
 
 class SymmetricCosineSmearing(nn.Module):
+    """Symmetric cosine basis function expansion.
+    
+    Expands distances using symmetric cosine basis functions,
+    providing smooth, periodic representations suitable for
+    capturing various distance-dependent interaction patterns.
+    """
     def __init__(self, num_basis=50):
         super().__init__()
         self.register_buffer('freq_k', torch.arange(1, num_basis + 1).float())
