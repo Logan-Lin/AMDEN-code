@@ -1,0 +1,38 @@
+Bootstrap: docker
+From: python:3.11-slim # torch.compile only supported by 3.11
+
+%files
+	pyproject.toml 
+  poetry.lock 
+
+%labels
+	python3 + DiffDisMatter + poetry
+
+%post -c /bin/bash
+  # update base
+  apt update
+  apt install -y \
+        curl \
+        git \
+        build-essential 
+
+  # install poetry
+  mkdir -p poetry/install
+  curl -sSL https://install.python-poetry.org | POETRY_HOME=/poetry/install python3 -
+  export PATH="/poetry/install/bin:$PATH"
+
+  # install dependencies
+  mkdir poetry/venvs
+  export POETRY_VIRTUALENVS_PATH="/poetry/venvs"
+  poetry install --no-root
+
+  
+%environment
+  export POETRY_VIRTUALENVS_PATH="/poetry/venvs"
+  export PATH="/poetry/install/bin:$PATH"
+  export PYTHONUNBUFFERED=1
+  export VENV_PATH=$(cd / && poetry env info --path)
+  export PATH="$VENV_PATH/bin:$PATH"
+
+%runscript
+  exec python3 "$@"

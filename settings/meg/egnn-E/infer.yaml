@@ -1,0 +1,111 @@
+model:
+  name: egnn_denoiser
+  params:
+    elements:
+      - X
+      - Si
+      - O
+      - Li
+      - Al
+      - Ba
+      - Be
+      - Ca
+      - K
+      - P
+      - Ti
+      - Zn
+    properties:
+      "E [GPa]":
+        dim: 1
+        offset: 75.6612144972
+        scale: 16.3364790889
+    d_prop_embed: 8
+    icg_mode: 'embed'
+    prop_embed_ln: true
+    # EGNN-specific parameters
+    coords_range: 6.0
+    hidden_nf: 128
+    n_coords: 8
+    n_layers: 4
+    normalization_factor: 40.0
+    r_cut: 6.5
+    sin_embedding: false
+    sin_embedding_time: false
+    tanh: false
+    residual: true
+    node_attrs: true
+
+scheduler:
+  name: sde_ve
+  params:
+    sigma_max_pos: 1.7
+    sigma_max_el: 1.5
+    noise_schedule_el: cosine
+    t_min: 0.01
+    t_max: 0.99
+ 
+loss:
+  name: epsilon_diff
+  params:
+    norm_type: l2
+    position_weight: 1.0
+    element_weight: 0.5
+
+load:
+  enabled: true
+  name: "BMP/egnn-E/prop_embed_ln-True"
+  epoch: 300
+
+train:
+  enabled: false
+  data:
+    dataset:
+      target_density: 0.11
+      source:
+        name: extxyz
+        params:
+          file: datasets/bmp/bmp.extxyz
+          properties_file: datasets/bmp/bmp-properties.json
+    dataloader:
+      batch_size: 2
+      num_workers: 0
+      shuffle: true
+    collate: {}
+  params:
+    lr: 1.e-3
+    optimizer_name: adam
+    num_epochs: 400
+    prop_null_prob: 0.0
+    prop_null_prob_all: 0.0
+    save:
+      name: "BMP/egnn-E"
+      epoch: 50
+ 
+infer:
+  enabled: true
+  data:
+    dataset:
+      target_density: 0.11
+      index: ':'
+      source:
+        name: extxyz
+        params:
+          file: datasets/bmp/bmp.extxyz
+          properties_file: datasets/bmp/bmp-properties.json
+    dataloader:
+      batch_size: 2
+      num_workers: 0
+      shuffle: false
+    collate: {}
+  params:
+    from_random_noise: true
+    n_steps: 200
+    non_stochastic: false
+    con_weight: 1.0
+    save:
+      name: "BMP/egnn-E"
+      enable_log: false
+      trajectories:
+        enabled: true
+        batches: [0,1,2,3]
+

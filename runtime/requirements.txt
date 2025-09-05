@@ -1,0 +1,16 @@
+numpy
+einops
+tqdm
+PyYAML
+sympy
+scipy
+ase
+matplotlib
+torch-nl
+e3nn
+tensorboard
+seaborn
+pandas
+scikit-learn
+requests
+python-dotenv

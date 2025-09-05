@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "DiffDisMatter"
+version = "0.1.0"
+description = "EGNN based diffusion model for amorphous materials"
+authors = ["Jonas <git@finkler.me>"]
+package-mode = false
+# readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+torch = "^2.4.1"
+ase = "^3.23.0"
+scipy = "^1.14.1"
+einops = "^0.8.0"
+tqdm = "^4.66.5"
+# kimpy = "^2.1.1"
+pyyaml = "^6.0.2"
+torch-nl = "^0.3"
+# sqnm = { 
+#   git = "https://github.com/moritzgubler/vc-sqnm", 
+#   subdirectory = "src/python" 
+# }
+torch-geometric = "^2.6.1"
+# torch-scatter = "^2.1.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
