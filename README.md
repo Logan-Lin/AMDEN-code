@@ -25,6 +25,20 @@ The codebase is organized into three main directories:
   - `a-sio2/` - Amorphous silica configurations  
   - `meg/` - Multi-element glass configurations
 
+
+Datasets can be found under **`datasets/`**:
+- **`flake`** - Nix Flake with a development environment to run the scripts for analyzing the datasets
+- **`MEG/`** - Multi-element glass dataset
+    - `data/` - Structure and property data
+    - `workflow/` - LAMMPS and Python scripts used for generating the dataset
+    - `src/` - Script to compute the Young's modulus shown in the paper
+- **`Si`** - Amorphous Silicon
+    - `data/` - Structure and property data
+    - `src/` - Script to compute the sheer modulus and average ring size shown in the paper
+- **`SiO2`** - Three variants of amorphous Silica with different cooling schedules (melt, quench, anneal)
+    - `data/` - Structure and property data
+    - `src/` - Script to compute radial distribution functions, bond angle distributions, structure factors and potential energies
+
 ## Setup Options
 
 Choose one of the following setup methods based on your environment:
