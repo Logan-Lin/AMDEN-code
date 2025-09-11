@@ -33,7 +33,7 @@ Datasets can be found under **`datasets/`**:
     - `workflow/` - LAMMPS and Python scripts used for generating the dataset
     - `src/` - Script to compute the Young's modulus shown in the paper
 - **`Si`** - Amorphous Silicon
-    - `data/` - Structure and property data
+    - `data/` - Structure data 
     - `src/` - Script to compute the sheer modulus and average ring size shown in the paper
 - **`SiO2`** - Three variants of amorphous Silica with different cooling schedules (melt, quench, anneal)
     - `data/` - Structure and property data
