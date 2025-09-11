@@ -1,0 +1,54 @@
+# variables
+variable inputfile string  init.data
+variable outDir    string  .
+variable potential getenv  BMP
+variable seed getenv  SEED
+
+# simulation parameters
+variable pressure equal 0.0 # 1 bar = 0.1 MPa
+variable temperature_low equal 2200.0
+variable temperature_high equal 9000.0
+
+print ${potential}
+
+# basic setup
+units           metal
+boundary        p p p
+atom_style      charge
+
+read_data       ${inputfile}
+include ${potential}/in.BMP
+
+
+
+## Molecular Dynamics Simulations
+thermo		1000 # print thermo info every 1000 steps
+thermo_style    custom step temp etotal pe ke press vol # lx ly lz pxx pyy pzz pxy pxz pyz # for nve, nvt and npt
+
+
+# initialize
+velocity        all create ${temperature_low} ${seed} # temp seed
+
+# fix             1 all nvt temp ${temperature_low} ${temperature_low} 0.2 
+fix             1 all npt temp ${temperature_low} ${temperature_low} 0.2 iso ${pressure} ${pressure} 2.0
+run             20000 
+unfix           1
+
+write_dump      all atom ${outDir}/evap_init.lammpstrj 
+
+change_box      all x scale 2.0
+
+reset_timestep  1
+variable        vol equal vol
+variable        press equal press
+variable        pe equal pe
+variable        temp equal temp
+variable        enthalpy equal enthalpy
+fix             fix_ravg all ave/time 1 100 100 v_temp v_vol v_press v_pe v_enthalpy file ${outDir}/evap.txt
+fix             1 all nvt temp ${temperature_low} ${temperature_high} 0.2 
+# dump            dump_evap all atom 1000 ${outDir}/evap.lammpstrj 
+run             60000 
+unfix           1
+# undump          dump_evap
+
+

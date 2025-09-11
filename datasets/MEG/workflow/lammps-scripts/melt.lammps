@@ -1,0 +1,51 @@
+# variables
+variable inputfile string  init.data
+variable outDir    string  .
+variable potential getenv  BMP
+variable seed getenv  SEED
+variable temperature_high getenv T_HIGH
+
+# simulation parameters
+variable pressure equal 1.0 # 1 bar = 0.1 MPa
+variable time_step equal 2.e-15 # 2 fs as set in the potential
+variable init_temperature equal ${temperature_high}-500
+
+print ${potential}
+
+# basic setup
+units           metal
+boundary        p p p
+atom_style      charge
+
+read_data       ${inputfile}
+include ${potential}/in.BMP
+
+
+# variables for averagin output
+variable        vol equal vol
+variable        pe equal pe
+variable        temp equal temp
+variable        enthalpy equal enthalpy
+
+## Molecular Dynamics Simulations
+thermo		1000 # print thermo info every 1000 steps
+thermo_style    custom step temp etotal pe ke press vol # lx ly lz pxx pyy pzz pxy pxz pyz # for nve, nvt and npt
+
+# initialize
+velocity        all create ${init_temperature} ${seed} # temp seed
+
+# melt
+dump            dump_melt_uw all custom 1000 ${outDir}/melt_uw.lammpstrj id type xu yu zu
+reset_timestep  1
+fix             fix_ravg all ave/time 1 100 100 v_temp v_vol v_pe v_enthalpy file ${outDir}/melt.txt
+fix             1 all npt temp ${init_temperature} ${temperature_high} 0.2 iso ${pressure} ${pressure} 2.0
+run             100000 # 200 ps
+unfix           1
+fix             1 all npt temp ${temperature_high} ${temperature_high} 0.2 iso ${pressure} ${pressure} 2.0
+run             200000 # 400 ps
+unfix           1
+unfix           fix_ravg
+undump          dump_melt_uw
+
+write_dump      all atom ${outDir}/melted.lammpstrj 
+write_data      ${outDir}/melted.data

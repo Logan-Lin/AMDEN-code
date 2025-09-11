@@ -1,0 +1,66 @@
+# variables
+variable inputfile string  melted.data
+variable outDir    string  .
+variable potential getenv  BMP
+variable seed getenv  SEED
+variable temperature_high getenv T_HIGH
+
+# simulation parameters
+variable pressure equal 1.0 # 1 bar = 0.1 MPa
+variable temperature_low equal 300.0
+variable cooling_rate equal 5.e12  # K/s 5.e12 = 5K/ps
+variable time_step equal 2.e-15 # 2 fs as set in the potential
+variable n_steps_cool equal ceil((${temperature_high}-${temperature_low})/${cooling_rate}/${time_step})
+variable init_temperature equal ${temperature_high}-500
+
+print ${potential}
+print "N steps cool: ${n_steps_cool}"
+
+# basic setup
+units           metal
+boundary        p p p
+atom_style      charge
+
+read_data       ${inputfile}
+include ${potential}/in.BMP
+
+
+# variables for averagin output
+variable        vol equal vol
+variable        pe equal pe
+variable        temp equal temp
+variable        enthalpy equal enthalpy
+
+## Molecular Dynamics Simulations
+thermo		1000 # print thermo info every 1000 steps
+thermo_style    custom step temp etotal pe ke press vol # lx ly lz pxx pyy pzz pxy pxz pyz # for nve, nvt and npt
+
+
+# initialize
+velocity        all create ${temperature_high} ${seed} # temp seed
+
+
+# quench
+# ~400000 = 800 ps
+# dump            dump_quench all atom 1000 ${outDir}/quench.lammpstrj 
+dump            dump_quench_uw all custom 1000 ${outDir}/quench_uw.lammpstrj id type xu yu zu
+reset_timestep  1
+fix             fix_ravg all ave/time 1 100 100 v_temp v_vol v_pe v_enthalpy file ${outDir}/quench.txt
+fix             1 all npt temp ${temperature_high} ${temperature_low} 0.2 iso ${pressure} ${pressure} 2.0
+run             ${n_steps_cool} 
+unfix           1
+unfix           fix_ravg
+undump          dump_quench_uw
+
+# equilibrate
+# dump            dump_equilibrate all atom 1000 ${outDir}/equilibrate.lammpstrj 
+reset_timestep  1
+fix             1 all npt temp ${temperature_low} ${temperature_low} 0.2 iso ${pressure} ${pressure} 2.0
+run             150000 # 300 ps
+unfix           1
+# undump          dump_equilibrate
+
+write_dump      all atom ${outDir}/sample.lammpstrj 
+write_data      ${outDir}/sample.data
+
+
